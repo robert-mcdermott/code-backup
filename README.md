@@ -134,13 +134,55 @@ Git pack files are already compressed, so `tar.zst` at level 3 is fast and almos
 
 ### Restoring
 
+A mirror folder such as `owner/repo.git` is a *bare* repository: a complete git repository without a working tree, which is also how GitHub stores repositories. Git can clone from it, push from it, and read history in it directly.
+
+**Get a normal working copy.** Clone the mirror, then point `origin` back at GitHub:
+
 ```sh
-git clone ~/Backups/github/owner/repo.git repo         # from a mirror
-# or push a mirror to a new remote:
+git clone ~/Backups/github/owner/repo.git ~/code/repo
+cd ~/code/repo
+git remote set-url origin git@github.com:owner/repo.git   # or https://github.com/owner/repo.git
+git fetch origin
+```
+
+The clone has the default branch checked out. Other branches are available as `origin/<branch>`; switch to one with `git switch <branch>`. Until you run `set-url`, `origin` points at the backup folder.
+
+**Restore a repository on GitHub** after it was deleted or damaged. Create an empty repository first (for example `gh repo create owner/repo --private`), then push every branch and tag:
+
+```sh
 git -C ~/Backups/github/owner/repo.git push --mirror git@github.com:owner/repo.git
-# from an archive:
+```
+
+If you synced with `--pull-refs`, push only branches and tags instead, because GitHub rejects pushes to `refs/pull/*`:
+
+```sh
+git -C ~/Backups/github/owner/repo.git push git@github.com:owner/repo.git \
+  'refs/heads/*:refs/heads/*' 'refs/tags/*:refs/tags/*'
+```
+
+Wikis work the same way: push `repo.wiki.git` to `git@github.com:owner/repo.wiki.git`, after creating the wiki's first page on GitHub.
+
+**Look inside a mirror without cloning:**
+
+```sh
+cd ~/Backups/github/owner/repo.git
+git log --oneline -10
+git branch -a
+git show HEAD:README.md                              # print one file
+git archive --format=zip HEAD -o ~/repo.zip          # export a snapshot without .git
+```
+
+**From an archive,** extract it first, then use any of the commands above on the extracted `owner/repo.git` folders:
+
+```sh
 zstd -dc github-backup-20261109-020000.tar.zst | tar -xf -
 ```
+
+Notes:
+
+- Don't commit inside a mirror folder. The next `sync` makes it match GitHub again and discards anything that is not on GitHub. Work in a clone instead.
+- With `--lfs`, a plain clone from the mirror contains only LFS pointer files. After restoring to GitHub, push the LFS objects from the mirror with `git -C owner/repo.git lfs push --all origin`, or run `git lfs fetch --all` in a clone of the restored repository.
+- If you want ready-to-use clones as the backup itself, use `--mode checkout`.
 
 ## Scheduling
 
